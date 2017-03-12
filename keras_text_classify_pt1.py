@@ -61,16 +61,16 @@ def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
     model.add(Dense(num_outputs, activation='softmax'))
     return model
     
-def eval_on_dataset(dataset_path, vocab_dict, num_classes, val_samples, batch_size=100):
+def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, val_samples, batch_size=100):
     start_time = datetime.datetime.now()
 
-    _generator = create_batch_generator(dataset_path, vocab_dict, num_classes, batch_size)
+    _generator = create_batch_generator(dataset_path, vocab_dict, num_classes, max_input_length, batch_size)
     scores = model.evaluate_generator(_generator, val_samples)
 
     end_time = datetime.datetime.now()
     elapsed_time = end_time - start_time
-    print('Elapsed Time: %s' % str(elapsed_time))
-    print("Loss: %1.4f. Accuracy: %.2f%%" % (scores[0], scores[1]*100))
+    print('Evaluation time on %d samples: %s' % (val_samples, str(elapsed_time)))
+    print("Loss: %1.4f. Accuracy: %.2f%% (Chance: %0.2f%%)" % (scores[0], scores[1]*100, 100.0/num_classes))
     
     return scores, elapsed_time
     
@@ -87,20 +87,23 @@ if __name__ == "__main__":
     
     # Training parameters
     batch_size = 100
-    samples_per_epoch = 1000
-    nb_epoch = 5
-    embedding_trainable = False
+    samples_per_epoch = 10000
+    nb_epoch = 10
+    embedding_trainable = True
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
+    # Model saving parameters
+    model_dir = 'models_cnn_lstm_train_embed_v01'
+    model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    
     # Logging
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy']
-    _callbacks = []
-    
-    # Model saving parameters
-    model_dir = 'models_cnn_lstm'
-    model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
+    model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
+    _callbacks = [model_saver]
     
     # Paths to input data files
     train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
@@ -138,8 +141,8 @@ if __name__ == "__main__":
     
     # Demo 
     # from http://machinelearningmastery.com/sequence-classification-lstm-recurrent-neural-networks-python-keras/
-    # fix random seed for reproducibility
-    np.random.seed(4)
+    # Fix random seed for reproducibility
+    np.random.seed(70) # Chose by random.org, guaranteed to be random 
     
     #Load class label dictionary
     class_ind_to_label = {}
@@ -147,7 +150,6 @@ if __name__ == "__main__":
         for ind, line in enumerate(cfi):
             class_ind_to_label[ind] = line.rstrip()
     num_classes = len(class_ind_to_label)
-    
     
     ## Create or load the model
     last_epoch, model_checkpoint_path = find_last_checkpoint(model_dir)
@@ -185,7 +187,7 @@ if __name__ == "__main__":
     if True:
         num_test_samples = 1000
         print('{0}: Starting testing on {1} samples'.format(datetime.datetime.now(), num_test_samples))
-        test_scores, test_time = eval_on_dataset(test_path, vocab_dict, num_classes, num_test_samples, batch_size)
+        test_scores, test_time = eval_on_dataset(test_path, vocab_dict, num_classes, max_input_length, num_test_samples, batch_size)
         time_per_sample = test_time.total_seconds() / num_test_samples
         print("Seconds per sample: %2.2e sec" % time_per_sample)
     
