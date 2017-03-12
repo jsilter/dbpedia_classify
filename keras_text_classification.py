@@ -388,7 +388,7 @@ if True and __name__ == "__main__":
     log_metrics = ['accuracy', 'categorical_accuracy', 'categorical_crossentropy', 'kullback_leibler_divergence', top_k_metric, briers_metrics, batch_pairwise_metrics]
     #log_metrics = ['categorical_accuracy', 'categorical_crossentropy']
     
-    ## create or load the model
+    ## Create or load the model
     last_epoch, model_checkpoint_path = restore_from_checkpoint(model_dir)
     initial_epoch = 0
     if model_checkpoint_path is not None:

@@ -16,35 +16,6 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 plt.style.use('ggplot')
 
-__cache = {}
-def tokenize_text(text, tolower=True, cache=__cache, paragraph=True):
-    """
-    Tokenize a block of text into sentences split by words
-    """
-    if text in cache:
-        return cache[text]
-        
-    if tolower:
-        text = text.lower()
-        
-    raw_sentences = nltk.sent_tokenize(text)
-    split_sentences = []
-    for sentence in raw_sentences:
-        words = nltk.word_tokenize(sentence)
-        if paragraph:
-            split_sentences.extend(words)
-        else:
-            split_sentences.append(words)
-    
-    if paragraph:
-        split_sentences = [split_sentences,]
-    
-    cache[text] = split_sentences
-    
-    return split_sentences
-    
-def clear_cache(cache=__cache):
-    cache.clear()
     
 def plot_with_labels(low_dim_embs, labels, filename=None, text_alpha=0.8, **plot_kwargs):
     assert low_dim_embs.shape[0] >= len(labels), "More labels than embeddings"
