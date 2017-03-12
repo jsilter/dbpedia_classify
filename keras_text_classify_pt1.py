@@ -89,13 +89,13 @@ if __name__ == "__main__":
     batch_size = 100
     samples_per_epoch = 10000
     nb_epoch = 10
-    embedding_trainable = True
+    embedding_trainable = False
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_dir = 'models_cnn_lstm_train_embed_v01'
+    model_dir = 'models_cnn_lstm_no_train_embed_v00'
     model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
