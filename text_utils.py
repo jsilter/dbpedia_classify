@@ -20,7 +20,9 @@ def create_training_batch(generator, num_classes, max_input_length, max_batch_si
     X_ = []
     y_ = []
     for info_dict in generator:
+        # Pick out the sequence of integers as the words
         seq_data = info_dict['int_word_list']
+        # Change the class numbering to 0-based
         _class = int(info_dict['class']) - 1
         
         text_data.append(info_dict['word_list'])
@@ -30,7 +32,9 @@ def create_training_batch(generator, num_classes, max_input_length, max_batch_si
         if len(y_) >= max_batch_size:
             break
             
+    # The sequences must all be the same length, so any which are shorter we pad up until the maximum input length
     X_train = sequence.pad_sequences(X_, maxlen=max_input_length)
+    # Change from class number (0,1,2,etc.) to a one-hot matrix (class 0 --> [1 0 0 ..], class 2 --> [0 0 1 ...])
     y_train = np_utils.to_categorical(y_, nb_classes=num_classes)
         
     if return_raw_text:
@@ -42,7 +46,6 @@ def create_training_batch(generator, num_classes, max_input_length, max_batch_si
 def create_desc_generator(input_path, word2id, indefinite=False, min_word_count=10):
     columns = ['class', 'title','description']
     text_field = 'description'
-    not_none = lambda x: x is not None
     _finished = False
     while not _finished:
         csv_reader = csv.DictReader(open(input_path, 'r'), fieldnames=columns)

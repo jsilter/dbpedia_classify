@@ -33,7 +33,6 @@ from utils import find_last_checkpoint
 def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
                     internal_lstm_size=100, embedding_matrix=None, embedding_trainable=True):
     """ 
-    
     Parameters
     top_words : int
         Size of the vocabulary
@@ -43,7 +42,6 @@ def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
         Initial/pre-trained embeddings
     embedding_trainable : bool
         Whether we should train the word embeddings. Must be true if no embedding matrix provided
-        
     """
     
     if not embedding_trainable:
