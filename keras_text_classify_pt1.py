@@ -59,15 +59,15 @@ def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
     model.add(Dense(num_outputs, activation='softmax'))
     return model
     
-def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, val_samples, batch_size=100):
+def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, steps, batch_size=100):
     start_time = datetime.datetime.now()
 
     _generator = create_batch_generator(dataset_path, vocab_dict, num_classes, max_input_length, batch_size)
-    scores = model.evaluate_generator(_generator, val_samples)
+    scores = model.evaluate_generator(_generator, steps)
 
     end_time = datetime.datetime.now()
     elapsed_time = end_time - start_time
-    print('Evaluation time on %d samples: %s' % (val_samples, str(elapsed_time)))
+    print('Evaluation time on %d samples: %s' % (steps*batch_size, str(elapsed_time)))
     print("Loss: %1.4f. Accuracy: %.2f%% (Chance: %0.2f%%)" % (scores[0], scores[1]*100, 100.0/num_classes))
     
     return scores, elapsed_time
@@ -206,8 +206,10 @@ if __name__ == "__main__":
     ## Evaluation of final model
     if True:
         num_test_samples = 1000
+        num_test_steps = num_test_samples // batch_size
+        num_test_samples = num_test_steps * batch_size
         print('{0}: Starting testing on {1} samples'.format(datetime.datetime.now(), num_test_samples))
-        test_scores, test_time = eval_on_dataset(test_path, vocab_dict, num_classes, max_input_length, num_test_samples, batch_size)
+        test_scores, test_time = eval_on_dataset(test_path, vocab_dict, num_classes, max_input_length, num_test_steps, batch_size)
         time_per_sample = test_time.total_seconds() / num_test_samples
         print("Seconds per sample: %2.2e sec" % time_per_sample)
     
