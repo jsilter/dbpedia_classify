@@ -87,8 +87,8 @@ if __name__ == "__main__":
     # Training parameters
     batch_size = 100
     batches_per_epoch = 100
-    epochs = 5
-    embedding_trainable = False
+    epochs = 20
+    embedding_trainable = True
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
