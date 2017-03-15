@@ -77,8 +77,8 @@ if __name__ == "__main__":
     # Vocab Parameters
     max_vocab_size = 5000
     min_word_count = 10
-    #vocab_path = 'word2vec_vocab.p'
-    vocab_path = 'gensim_vocab.p'
+    vocab_path = 'word2vec_vocab.p'
+    #vocab_path = 'gensim_vocab.p'
 
     # Network parameters
     embedding_size = 300
@@ -88,14 +88,14 @@ if __name__ == "__main__":
     batch_size = 100
     batches_per_epoch = 100
     epochs = 20
-    embedding_trainable = True
+    embedding_trainable = False
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_dir = 'models_cnn_lstm_custom_embed_v02'
-    model_path = os.path.join(model_dir, 'gensim_cnn_lstm_{epoch:02d}.hdf5')
+    model_dir = 'models_cnn_lstm_no_train_embed_v00'
+    model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     
@@ -114,8 +114,8 @@ if __name__ == "__main__":
     # Destination file for vocab
     word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
     
-    build_own_vocab = True
-    use_google_word2vec = False
+    build_own_vocab = False
+    use_google_word2vec = True
     
 if build_own_vocab and __name__ == "__main__":
     
