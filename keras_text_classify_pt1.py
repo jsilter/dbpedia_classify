@@ -12,7 +12,7 @@ import nltk
 
 import keras
 import keras.metrics as kmetrics
-from keras.utils import np_utils
+from keras.utils import to_categorical
 from keras.datasets import imdb
 from keras.models import Sequential
 from keras.layers import Dense
@@ -26,7 +26,7 @@ import keras.backend as K
 import gensim
 from gensim.models.word2vec import Word2Vec
 
-from text_utils import create_batch_generator
+from text_utils import create_batch_generator, basic_desc_generator
 from utils import find_last_checkpoint
 
 
@@ -53,8 +53,8 @@ def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
     
     model = Sequential()
     model.add(Embedding(top_words, embedding_size, input_length=max_input_length, weights=_weights, trainable=embedding_trainable))
-    model.add(Convolution1D(nb_filter=32, filter_length=3, border_mode='same', activation='relu'))
-    model.add(MaxPooling1D(pool_length=2))
+    model.add(Convolution1D(filters=32, kernel_size=3, padding='same', activation='relu'))
+    model.add(MaxPooling1D(pool_size=2))
     model.add(LSTM(internal_lstm_size))
     model.add(Dense(num_outputs, activation='softmax'))
     return model
@@ -77,7 +77,8 @@ if __name__ == "__main__":
     # Vocab Parameters
     max_vocab_size = 5000
     min_word_count = 10
-    vocab_path = 'gensim_vocab.p'
+    vocab_path = 'word2vec_vocab.p'
+    #vocab_path = 'gensim_vocab.p'
 
     # Network parameters
     embedding_size = 300
@@ -85,16 +86,16 @@ if __name__ == "__main__":
     
     # Training parameters
     batch_size = 100
-    samples_per_epoch = 10000
-    nb_epoch = 10
+    batches_per_epoch = 100
+    epochs = 5
     embedding_trainable = False
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_dir = 'models_cnn_lstm_no_train_embed_v00'
-    model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
+    model_dir = 'models_cnn_lstm_custom_embed_v02'
+    model_path = os.path.join(model_dir, 'gensim_cnn_lstm_{epoch:02d}.hdf5')
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     
@@ -113,7 +114,25 @@ if __name__ == "__main__":
     # Destination file for vocab
     word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
     
-if __name__ == "__main__":
+    build_own_vocab = False
+    use_google_word2vec = True
+    
+if build_own_vocab and __name__ == "__main__":
+    
+        
+    if not os.path.exists(vocab_path):
+        
+        vocab_model = Word2Vec(size=embedding_size, max_vocab_size=max_vocab_size, min_count=min_word_count, workers=2, seed=2245)
+        
+        print('{0}: Building own vocabulary'.format(datetime.datetime.now()))
+        desc_generator = basic_desc_generator(train_path)
+        vocab_model.build_vocab(desc_generator)
+        print('{0}: Saving vocabulary to {1}'.format(datetime.datetime.now(), vocab_path))
+        vocab_model.save(vocab_path)
+    
+    vocab_model = Word2Vec.load(vocab_path)
+    
+if use_google_word2vec and __name__ == "__main__":
     ## Google word2vec
     # Load pre-trained embeddings
     assert embedding_size == 300
@@ -125,14 +144,14 @@ if __name__ == "__main__":
     #so these will be the most important, and it saves a bunch of space/time
     #Save vocab for future use
     if not os.path.exists(word2vec_model_path):
+        print('Loading word2vec embeddings from {0:}'.format(google_word2vec))
         model = Word2Vec.load_word2vec_format(google_word2vec, limit=top_words, binary=True)
         model.init_sims(replace=True)
         model.save(word2vec_model_path)
     
+    print('Loading saved gensim model from {0:}'.format(word2vec_model_path))
     word2vec_model = Word2Vec.load(word2vec_model_path)
     vocab_model = word2vec_model
-    embedding_matrix = vocab_model.syn0
-    vocab_dict = {word: vocab_model.vocab[word].index for word in vocab_model.vocab.keys()}
     
 if __name__ == "__main__":
     ## Main training and testing
@@ -140,7 +159,10 @@ if __name__ == "__main__":
     # Demo 
     # from http://machinelearningmastery.com/sequence-classification-lstm-recurrent-neural-networks-python-keras/
     # Fix random seed for reproducibility
-    np.random.seed(70) # Chose by random.org, guaranteed to be random 
+    np.random.seed(70) # Chosen by random.org, guaranteed to be random 
+    
+    embedding_matrix = vocab_model.syn0
+    vocab_dict = {word: vocab_model.vocab[word].index for word in vocab_model.vocab.keys()}
     
     #Load class label dictionary
     class_ind_to_label = {}
@@ -169,17 +191,17 @@ if __name__ == "__main__":
     print(model.summary())
     
     ## Training
-    if initial_epoch < nb_epoch:
+    if initial_epoch < epochs:
         training_start_time = datetime.datetime.now()
-        print('{0}: Starting training at epoch {1}/{2}'.format(training_start_time, initial_epoch, nb_epoch))
+        print('{0}: Starting training at epoch {1}/{2}'.format(training_start_time, initial_epoch, epochs))
         
         train_generator = create_batch_generator(train_path, vocab_dict, num_classes, max_input_length, batch_size)
-        model.fit_generator(train_generator, samples_per_epoch, nb_epoch, callbacks=_callbacks, initial_epoch=initial_epoch)
+        model.fit_generator(train_generator, batches_per_epoch, epochs, callbacks=_callbacks, initial_epoch=initial_epoch)
         
         training_end_time = datetime.datetime.now()
-        print('{0}: Training finished at epoch {1}'.format(training_end_time, nb_epoch))
+        print('{0}: Training finished at epoch {1}'.format(training_end_time, epochs))
         training_time = training_end_time - training_start_time
-        print('{0} elapsed to train {1} epochs'.format(str(training_time), nb_epoch - initial_epoch))
+        print('{0} elapsed to train {1} epochs'.format(str(training_time), epochs - initial_epoch))
         
     ## Evaluation of final model
     if True:

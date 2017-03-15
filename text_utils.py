@@ -11,7 +11,7 @@ import numpy as np
 import nltk
 
 import keras
-from keras.utils import np_utils
+from keras.utils import to_categorical
 from keras.preprocessing import sequence
 
 
@@ -35,26 +35,33 @@ def create_training_batch(generator, num_classes, max_input_length, max_batch_si
     # The sequences must all be the same length, so any which are shorter we pad up until the maximum input length
     X_train = sequence.pad_sequences(X_, maxlen=max_input_length)
     # Change from class number (0,1,2,etc.) to a one-hot matrix (class 0 --> [1 0 0 ..], class 2 --> [0 0 1 ...])
-    y_train = np_utils.to_categorical(y_, nb_classes=num_classes)
+    y_train = to_categorical(y_, num_classes=num_classes)
         
     if return_raw_text:
         return X_train, y_train, text_data
     else:
         return X_train, y_train
-    
+        
+def desc_dict_generator(input_path, fieldnames=['class', 'title','description'], text_field='description'):
+    csv_reader = csv.DictReader(open(input_path, 'r'), fieldnames=fieldnames)
+    for cur_dict in csv_reader:
+        text = cur_dict[text_field].strip().lower()
+        # Don't love this but what can you do
+        text = text.decode("ascii","ignore").encode("ascii")
+        cur_dict['word_list'] = nltk.word_tokenize(text)
+        yield cur_dict
+        
+def basic_desc_generator(input_path):
+    dict_generator = desc_dict_generator(input_path)
+    for cur_dict in dict_generator:
+        yield cur_dict['word_list']
     
 def create_desc_generator(input_path, word2id, indefinite=False, min_word_count=10):
-    columns = ['class', 'title','description']
-    text_field = 'description'
     _finished = False
     while not _finished:
-        csv_reader = csv.DictReader(open(input_path, 'r'), fieldnames=columns)
-        for ind, cur_dict in enumerate(csv_reader):
-            text = cur_dict[text_field].strip().lower()
-            # Don't love this but what can you do
-            text = text.decode("ascii","ignore").encode("ascii")
-            word_list = nltk.word_tokenize(text)
-            cur_dict['word_list'] = word_list
+        dict_generator = desc_dict_generator(input_path)
+        for cur_dict in dict_generator:
+            word_list = cur_dict['word_list']
             int_word_list = [word2id[w] for w in word_list if w in word2id]
             if len(int_word_list) < min_word_count:
                 continue
