@@ -77,8 +77,8 @@ if __name__ == "__main__":
     # Vocab Parameters
     max_vocab_size = 5000
     min_word_count = 10
-    vocab_path = 'word2vec_vocab.p'
-    #vocab_path = 'gensim_vocab.p'
+    #vocab_path = 'word2vec_vocab.p'
+    vocab_path = 'gensim_vocab.p'
 
     # Network parameters
     embedding_size = 300
@@ -114,8 +114,8 @@ if __name__ == "__main__":
     # Destination file for vocab
     word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
     
-    build_own_vocab = False
-    use_google_word2vec = True
+    build_own_vocab = True
+    use_google_word2vec = False
     
 if build_own_vocab and __name__ == "__main__":
     
@@ -138,14 +138,13 @@ if use_google_word2vec and __name__ == "__main__":
     assert embedding_size == 300
     import gensim
     from gensim.models.word2vec import Word2Vec
-    top_words = max_vocab_size
 
     #Take the first bunch of words, these are sorted by decreasing count 
     #so these will be the most important, and it saves a bunch of space/time
     #Save vocab for future use
     if not os.path.exists(word2vec_model_path):
         print('Loading word2vec embeddings from {0:}'.format(google_word2vec))
-        model = Word2Vec.load_word2vec_format(google_word2vec, limit=top_words, binary=True)
+        model = Word2Vec.load_word2vec_format(google_word2vec, limit=max_vocab_size, binary=True)
         model.init_sims(replace=True)
         model.save(word2vec_model_path)
     
@@ -163,6 +162,7 @@ if __name__ == "__main__":
     
     embedding_matrix = vocab_model.syn0
     vocab_dict = {word: vocab_model.vocab[word].index for word in vocab_model.vocab.keys()}
+    vocab_size = len(vocab_dict)
     
     #Load class label dictionary
     class_ind_to_label = {}
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     else:
         print('Building new model')
         #----------------------#
-        model = build_lstm_model(max_vocab_size, embedding_size, max_input_length, num_classes,
+        model = build_lstm_model(vocab_size, embedding_size, max_input_length, num_classes,
         embedding_matrix=embedding_matrix, embedding_trainable=embedding_trainable)
     
         model.compile(loss=loss_, optimizer=optimizer_, metrics=log_metrics)
