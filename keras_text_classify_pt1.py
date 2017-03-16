@@ -94,7 +94,8 @@ if __name__ == "__main__":
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_dir = 'models_cnn_lstm_no_train_embed_v00'
+    #model_dir = 'models_cnn_lstm_no_train_embed_v00'
+    model_dir = 'models_cnn_lstm_train_embed_v01'
     model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
