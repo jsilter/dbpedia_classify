@@ -32,6 +32,8 @@ from gensim.models.word2vec import Word2Vec
 from text_utils import create_batch_generator, basic_desc_generator
 from utils import find_last_checkpoint
 
+from custom_metrics import precision, recall, fmeasure, append_metric
+
 
 def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
                     internal_lstm_size=100, embedding_matrix=None, embedding_trainable=True):
@@ -74,13 +76,6 @@ def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, ste
     print("Loss: %1.4f. Accuracy: %.2f%% (Chance: %0.2f%%)" % (scores[0], scores[1]*100, 100.0/num_classes))
     
     return scores, elapsed_time
-    
-def test_metric(y_true, y_pred):
-    a = keras.metrics.categorical_accuracy(y_true, y_pred)
-    b = keras.metrics.top_k_categorical_accuracy(y_true, y_pred, k=3)
-    
-    # Returns an error because metrics can't be dictionaries
-    return {'a': a, 'b': b}
     
 def _brier(num_classes, preds, pick_classes):
     """
@@ -136,6 +131,51 @@ def brier_pred(y_true, y_pred):
     
 def brier_true(y_true, y_pred):
     return brier_skill(y_true, y_pred, True)
+    
+def make_stats(prefix, metric):
+    import tensorflow as tf
+    
+    use_metric = metric
+    if isinstance(metric, list):
+        use_metric = tf.stack(metric)
+      
+    with tf.name_scope(prefix):
+        #tf.summary.histogram(prefix, use_metric)
+        tf.summary.scalar('mean', K.mean(use_metric))
+        tf.summary.scalar('std', K.std(use_metric))
+        tf.summary.scalar('max', K.max(use_metric))
+        tf.summary.scalar('min', K.min(use_metric))
+    
+def create_batch_pairwise_metrics(y_true, y_pred):
+    #assert K.get_variable_shape(y_true)[1] == K.get_variable_shape(y_pred)[1]
+    num_classes = K.get_variable_shape(y_pred)[1]
+    preds_cats = K.argmax(y_pred, axis=1)
+    preds_one_hot = K.one_hot(preds_cats, num_classes)
+    
+    overall_precision = [None for _ in range(num_classes)]
+    overall_recall = [None for _ in range(num_classes)]
+    overall_fmeasure = [None for _ in range(num_classes)]
+    
+    for cc in range(num_classes):
+        with tf.name_scope('%d' % cc):
+            #Metrics should take 1D arrays which are 1 for positive, 0 for negative
+            two_true, two_pred = y_true[:,cc], preds_one_hot[:, cc]
+            cur_prec = precision(two_true, two_pred)
+            cur_rec = recall(two_true, two_pred)
+            cur_fmeas = fmeasure(two_true, two_pred)
+            tf.summary.scalar('precision', cur_prec)
+            tf.summary.scalar('recall', cur_rec)
+            tf.summary.scalar('fmeasure', cur_fmeas)
+        
+        overall_precision[cc] = cur_prec
+        overall_recall[cc] = cur_rec
+        overall_fmeasure[cc] = cur_fmeas
+    
+    with tf.name_scope('overall'):
+        make_stats('precision', overall_precision)
+        make_stats('recall', overall_recall)
+        make_stats('fmeasure', overall_fmeasure)
+        
     
 class TFCallback(keras.callbacks.Callback):
         
@@ -194,7 +234,7 @@ if __name__ == "__main__":
     # Logging
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy', brier_pred, brier_true]
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
-    tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_images=False)
+    tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=False, write_images=False)
     #_callbacks = [model_saver, tboard_saver]
     _callbacks = [tboard_saver]
     
@@ -286,11 +326,12 @@ if __name__ == "__main__":
     print(model.summary())
     
     ## Custom tensorflow logging
-    # This is the final softmax output layer of the model
-    y_pred = model.outputs[0]
     # Placeholder for the true values
     y_true = model.model._feed_targets[0]
+    # This is the final softmax output layer of the model
+    y_pred = model.outputs[0]
     
+    create_batch_pairwise_metrics(y_true, y_pred)
     
     ## Training
     if initial_epoch < epochs:
@@ -298,7 +339,9 @@ if __name__ == "__main__":
         print('{0}: Starting training at epoch {1}/{2}'.format(training_start_time, initial_epoch, epochs))
         
         train_generator = create_batch_generator(train_path, vocab_dict, num_classes, max_input_length, batch_size)
-        model.fit_generator(train_generator, batches_per_epoch, epochs, callbacks=_callbacks, initial_epoch=initial_epoch)
+        val_generator = create_batch_generator(train_path, vocab_dict, num_classes, max_input_length, batch_size)
+        model.fit_generator(train_generator, batches_per_epoch, epochs, callbacks=_callbacks, initial_epoch=initial_epoch, 
+            validation_data=val_generator, validation_steps=1)
         
         training_end_time = datetime.datetime.now()
         print('{0}: Training finished at epoch {1}'.format(training_end_time, epochs))
