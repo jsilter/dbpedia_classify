@@ -6,6 +6,7 @@ import random
 import datetime
 import os
 import re
+import itertools
 
 import numpy as np
 import nltk
@@ -145,6 +146,21 @@ def make_stats(prefix, metric):
         tf.summary.scalar('std', K.std(use_metric))
         tf.summary.scalar('max', K.max(use_metric))
         tf.summary.scalar('min', K.min(use_metric))
+        
+def make_binary_metric(metric_name, metric_func, num_classes, y_true, preds_one_hot):
+    
+    overall_met = [None for _ in range(num_classes)]
+    with tf.name_scope(metric_name):
+        for cc in range(num_classes):
+            #Metrics should take 1D arrays which are 1 for positive, 0 for negative
+            two_true, two_pred = y_true[:, cc], preds_one_hot[:, cc]
+            cur_met = metric_func(two_true, two_pred)
+            tf.summary.scalar('%d' % cc, cur_met)
+
+            overall_met[cc] = cur_met
+                
+        
+        make_stats('overall', overall_met) 
     
 def create_batch_pairwise_metrics(y_true, y_pred):
     #assert K.get_variable_shape(y_true)[1] == K.get_variable_shape(y_pred)[1]
@@ -152,54 +168,59 @@ def create_batch_pairwise_metrics(y_true, y_pred):
     preds_cats = K.argmax(y_pred, axis=1)
     preds_one_hot = K.one_hot(preds_cats, num_classes)
     
-    overall_precision = [None for _ in range(num_classes)]
-    overall_recall = [None for _ in range(num_classes)]
-    overall_fmeasure = [None for _ in range(num_classes)]
+    make_binary_metric('precision', precision, num_classes, y_true, preds_one_hot)
+    make_binary_metric('recall', recall, num_classes, y_true, preds_one_hot)
+    make_binary_metric('fmeasure', fmeasure, num_classes, y_true, preds_one_hot)
     
-    for cc in range(num_classes):
-        with tf.name_scope('%d' % cc):
-            #Metrics should take 1D arrays which are 1 for positive, 0 for negative
-            two_true, two_pred = y_true[:,cc], preds_one_hot[:, cc]
-            cur_prec = precision(two_true, two_pred)
-            cur_rec = recall(two_true, two_pred)
-            cur_fmeas = fmeasure(two_true, two_pred)
-            tf.summary.scalar('precision', cur_prec)
-            tf.summary.scalar('recall', cur_rec)
-            tf.summary.scalar('fmeasure', cur_fmeas)
-        
-        overall_precision[cc] = cur_prec
-        overall_recall[cc] = cur_rec
-        overall_fmeasure[cc] = cur_fmeas
+    # with tf.name_scope('precision'):
+    #     for cc in range(num_classes):
+    #         #Metrics should take 1D arrays which are 1 for positive, 0 for negative
+    #         two_true, two_pred = y_true[:, cc], preds_one_hot[:, cc]
+    #         cur_prec = precision(two_true, two_pred)
+    #         tf.summary.scalar('%d' % cc, cur_prec)
+    #             
+    #         overall_precision[cc] = cur_prec
+    #     
+    #     with tf.name_scope('overall'):
+    #         make_stats('precision', overall_precision)
+    #         #overall_recall[cc] = cur_rec
+    #         #overall_fmeasure[cc] = cur_fmeas
     
-    with tf.name_scope('overall'):
-        make_stats('precision', overall_precision)
-        make_stats('recall', overall_recall)
-        make_stats('fmeasure', overall_fmeasure)
-        
     
-class TFCallback(keras.callbacks.Callback):
+        #make_stats('recall', overall_recall)
+        #make_stats('fmeasure', overall_fmeasure)
+        #cur_rec = recall(two_true, two_pred)
+        #cur_fmeas = fmeasure(two_true, two_pred)
+        #tf.summary.scalar('recall', cur_rec)
+        #tf.summary.scalar('fmeasure', cur_fmeas)
         
-    def on_train_begin(self, logs={}):
-        pass
-        
-    def on_epoch_begin(self, epoch, logs={}):
-        self._epoch_start = datetime.datetime.now()
-        
-    def on_batch_begin(self, batch, logs={}):
-        self._batch_start = datetime.datetime.now()
 
-    def on_batch_end(self, batch, logs={}):
-        batch_time = datetime.datetime.now() - self._batch_start
-        batch_seconds = batch_time.total_seconds()
-        self.batch_seconds.append(batch_seconds)
+class TensorBoardMod(keras.callbacks.TensorBoard):
+    """ Modification to standard TensorBoard callback; that one
+    wasn't logging all the variables I wanted """
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
         
-    def on_epoch_end(self, epoch, logs={}):
-        epoch_time = datetime.datetime.now() - self._epoch_start
-        epoch_seconds = epoch_time.total_seconds()
-        self.epoch_seconds.append(epoch_seconds)
-        logs['timing/epoch_seconds'] = K.cast_to_floatx(epoch_seconds)
-        logs['timing/batch_seconds/mean'] = K.cast_to_floatx(np.mean(self.batch_seconds))
-        logs['timing/batch_seconds/std'] = K.cast_to_floatx(np.std(self.batch_seconds))
+        if self.validation_data:
+            tensors = self.model.inputs + self.model.model._feed_targets
+            # TODO Hard-code the unwrapping for now, not sure what's happening to make the structure so weird
+            val_data = [self.validation_data[0], self.validation_data[1][0]]
+            feed_dict = dict(zip(tensors, val_data))
+            result = self.sess.run([self.merged], feed_dict=feed_dict)
+            summary_str = result[0]
+            self.writer.add_summary(summary_str, epoch)
+
+        for name, value in logs.items():
+            if name in ['batch', 'size']:
+                continue
+            summary = tf.Summary()
+            summary_value = summary.value.add()
+            summary_value.simple_value = value.item()
+            summary_value.tag = name
+            self.writer.add_summary(summary, epoch)
+        self.writer.flush()
+
         
     
 if __name__ == "__main__":
@@ -234,7 +255,7 @@ if __name__ == "__main__":
     # Logging
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy', brier_pred, brier_true]
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
-    tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=False, write_images=False)
+    tboard_saver = TensorBoardMod(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
     #_callbacks = [model_saver, tboard_saver]
     _callbacks = [tboard_saver]
     
@@ -339,9 +360,13 @@ if __name__ == "__main__":
         print('{0}: Starting training at epoch {1}/{2}'.format(training_start_time, initial_epoch, epochs))
         
         train_generator = create_batch_generator(train_path, vocab_dict, num_classes, max_input_length, batch_size)
-        val_generator = create_batch_generator(train_path, vocab_dict, num_classes, max_input_length, batch_size)
+        
+        val_size = 1000
+        val_generator = create_batch_generator(test_path, vocab_dict, num_classes, max_input_length, val_size)
+        val_X, val_y = val_generator.next()
+        
         model.fit_generator(train_generator, batches_per_epoch, epochs, callbacks=_callbacks, initial_epoch=initial_epoch, 
-            validation_data=val_generator, validation_steps=1)
+            validation_data=(val_X, val_y), verbose=1)
         
         training_end_time = datetime.datetime.now()
         print('{0}: Training finished at epoch {1}'.format(training_end_time, epochs))
