@@ -159,8 +159,7 @@ def make_binary_metric(metric_name, metric_func, num_classes, y_true, preds_one_
 
             overall_met[cc] = cur_met
                 
-        
-        make_stats('overall', overall_met) 
+        tf.summary.histogram('overall', overall_met) 
     
 def create_batch_pairwise_metrics(y_true, y_pred):
     #assert K.get_variable_shape(y_true)[1] == K.get_variable_shape(y_pred)[1]
@@ -171,29 +170,6 @@ def create_batch_pairwise_metrics(y_true, y_pred):
     make_binary_metric('precision', precision, num_classes, y_true, preds_one_hot)
     make_binary_metric('recall', recall, num_classes, y_true, preds_one_hot)
     make_binary_metric('fmeasure', fmeasure, num_classes, y_true, preds_one_hot)
-    
-    # with tf.name_scope('precision'):
-    #     for cc in range(num_classes):
-    #         #Metrics should take 1D arrays which are 1 for positive, 0 for negative
-    #         two_true, two_pred = y_true[:, cc], preds_one_hot[:, cc]
-    #         cur_prec = precision(two_true, two_pred)
-    #         tf.summary.scalar('%d' % cc, cur_prec)
-    #             
-    #         overall_precision[cc] = cur_prec
-    #     
-    #     with tf.name_scope('overall'):
-    #         make_stats('precision', overall_precision)
-    #         #overall_recall[cc] = cur_rec
-    #         #overall_fmeasure[cc] = cur_fmeas
-    
-    
-        #make_stats('recall', overall_recall)
-        #make_stats('fmeasure', overall_fmeasure)
-        #cur_rec = recall(two_true, two_pred)
-        #cur_fmeas = fmeasure(two_true, two_pred)
-        #tf.summary.scalar('recall', cur_rec)
-        #tf.summary.scalar('fmeasure', cur_fmeas)
-        
 
 class TensorBoardMod(keras.callbacks.TensorBoard):
     """ Modification to standard TensorBoard callback; that one
@@ -206,6 +182,8 @@ class TensorBoardMod(keras.callbacks.TensorBoard):
             tensors = self.model.inputs + self.model.model._feed_targets
             # TODO Hard-code the unwrapping for now, not sure what's happening to make the structure so weird
             val_data = [self.validation_data[0], self.validation_data[1][0]]
+            print(val_data[0].shape)
+            print(val_data[1].shape)
             feed_dict = dict(zip(tensors, val_data))
             result = self.sess.run([self.merged], feed_dict=feed_dict)
             summary_str = result[0]
@@ -221,8 +199,6 @@ class TensorBoardMod(keras.callbacks.TensorBoard):
             self.writer.add_summary(summary, epoch)
         self.writer.flush()
 
-        
-    
 if __name__ == "__main__":
     ## Parameters
     # Vocab Parameters
@@ -237,8 +213,8 @@ if __name__ == "__main__":
     
     # Training parameters
     batch_size = 100
-    batches_per_epoch = 4
-    epochs = 3
+    batches_per_epoch = 10
+    epochs = 100
     embedding_trainable = False
     
     loss_ = 'categorical_crossentropy'
@@ -256,8 +232,8 @@ if __name__ == "__main__":
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy', brier_pred, brier_true]
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
     tboard_saver = TensorBoardMod(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
-    #_callbacks = [model_saver, tboard_saver]
-    _callbacks = [tboard_saver]
+    _callbacks = [model_saver, tboard_saver]
+    _#callbacks = [tboard_saver]
     
     # Paths to input data files
     train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
