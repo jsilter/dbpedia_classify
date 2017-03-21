@@ -71,7 +71,8 @@ def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, ste
     print("Loss: %1.4f. Accuracy: %.2f%% (Chance: %0.2f%%)" % (scores[0], scores[1]*100, 100.0/num_classes))
     
     return scores, elapsed_time
-    
+
+
 if __name__ == "__main__":
     ## Parameters
     # Vocab Parameters
@@ -86,24 +87,27 @@ if __name__ == "__main__":
     
     # Training parameters
     batch_size = 100
-    batches_per_epoch = 100
-    epochs = 20
-    embedding_trainable = True
+    batches_per_epoch = 10
+    epochs = 100
+    embedding_trainable = False
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
     # Model saving parameters
-    #model_dir = 'models_cnn_lstm_no_train_embed_v00'
-    model_dir = 'models_cnn_lstm_train_embed_v01'
-    model_path = os.path.join(model_dir, 'word2vec_cnn_lstm_{epoch:02d}.hdf5')
+    model_tag = 'cnn_lstm_no_train_embed_scratch'
+    log_dir = './keras_logs_%s' % model_tag
+    model_dir = 'models_%s' % model_tag
+    model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     
     # Logging
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy']
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
-    _callbacks = [model_saver]
+    tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
+    _callbacks = [model_saver, tboard_saver]
+    #_callbacks = [tboard_saver]
     
     # Paths to input data files
     train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'

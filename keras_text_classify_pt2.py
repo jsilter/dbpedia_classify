@@ -6,7 +6,6 @@ import random
 import datetime
 import os
 import re
-import itertools
 
 import numpy as np
 import nltk
@@ -33,7 +32,8 @@ from gensim.models.word2vec import Word2Vec
 from text_utils import create_batch_generator, basic_desc_generator
 from utils import find_last_checkpoint
 
-from custom_metrics import precision, recall, fmeasure, append_metric
+from custom_metrics import *
+from custom_callbacks import TensorBoardMod
 
 
 def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
@@ -77,127 +77,7 @@ def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, ste
     print("Loss: %1.4f. Accuracy: %.2f%% (Chance: %0.2f%%)" % (scores[0], scores[1]*100, 100.0/num_classes))
     
     return scores, elapsed_time
-    
-def _brier(num_classes, preds, pick_classes):
-    """
-    Calculate the Brier skill score, from http://www.pnas.org/content/104/14/5959.full
-    `preds` is the list of predicted probabilities, `pick_class` is the index of the class to use
-    The reason we don't just take the maximum from `preds` is we might be using the `actual` value which
-    might not be the predicted class
-    """
-    
-    inv_num_cl = 1.0/num_classes
-    
-    denom = (1-inv_num_cl)**2 + (num_classes-1)*(inv_num_cl)**2
-    numerator = 1 + K.sum(K.square(preds), axis=1)
-    
-    inds = tf.stack([tf.to_int64(tf.range(tf.shape(preds)[0])), pick_classes])
-    t_inds = K.transpose(inds)
-    sub_pick = 2*tf.gather_nd(preds, t_inds)    
-    brier_pick = 1 - (numerator - sub_pick)/denom  
-    
-    return brier_pick
-    
-def brier_skill(y_true, y_pred, use_true):
-    """
-    Calculate Brier score, relative to either true class or predicted class
-    if use_true = True, it's relative to the y_true class
-    if use_true = False, it's relative to the y_pred class (how confident are we in the prediction, no knowledge of true class)
-    
-    """
-    do_eval = False
-    
-    # We use this function later on for static values
-    if isinstance(y_pred, np.ndarray):
-        do_eval = True
-        y_pred = K.variable(y_pred)
-    
-    num_classes = K.get_variable_shape(y_pred)[1]
-    
-    if use_true:
-        y_pick = y_true
-    else:
-        y_pick = y_pred
-        
-    pick_classes = K.argmax(y_pick, axis=1)
-    brier_out = _brier(num_classes, y_pred, pick_classes)
-    
-    if do_eval:
-        brier_out = K.get_value(brier_out)
-    
-    return brier_out
-    
-def brier_pred(y_true, y_pred):
-    return brier_skill(y_true, y_pred, False)
-    
-def brier_true(y_true, y_pred):
-    return brier_skill(y_true, y_pred, True)
-    
-def make_stats(prefix, metric):
-    import tensorflow as tf
-    
-    use_metric = metric
-    if isinstance(metric, list):
-        use_metric = tf.stack(metric)
-      
-    with tf.name_scope(prefix):
-        #tf.summary.histogram(prefix, use_metric)
-        tf.summary.scalar('mean', K.mean(use_metric))
-        tf.summary.scalar('std', K.std(use_metric))
-        tf.summary.scalar('max', K.max(use_metric))
-        tf.summary.scalar('min', K.min(use_metric))
-        
-def make_binary_metric(metric_name, metric_func, num_classes, y_true, preds_one_hot):
-    
-    overall_met = [None for _ in range(num_classes)]
-    with tf.name_scope(metric_name):
-        for cc in range(num_classes):
-            #Metrics should take 1D arrays which are 1 for positive, 0 for negative
-            two_true, two_pred = y_true[:, cc], preds_one_hot[:, cc]
-            cur_met = metric_func(two_true, two_pred)
-            tf.summary.scalar('%d' % cc, cur_met)
 
-            overall_met[cc] = cur_met
-                
-        tf.summary.histogram('overall', overall_met) 
-    
-def create_batch_pairwise_metrics(y_true, y_pred):
-    #assert K.get_variable_shape(y_true)[1] == K.get_variable_shape(y_pred)[1]
-    num_classes = K.get_variable_shape(y_pred)[1]
-    preds_cats = K.argmax(y_pred, axis=1)
-    preds_one_hot = K.one_hot(preds_cats, num_classes)
-    
-    make_binary_metric('precision', precision, num_classes, y_true, preds_one_hot)
-    make_binary_metric('recall', recall, num_classes, y_true, preds_one_hot)
-    make_binary_metric('fmeasure', fmeasure, num_classes, y_true, preds_one_hot)
-
-class TensorBoardMod(keras.callbacks.TensorBoard):
-    """ Modification to standard TensorBoard callback; that one
-    wasn't logging all the variables I wanted """
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        
-        if self.validation_data:
-            tensors = self.model.inputs + self.model.model._feed_targets
-            # TODO Hard-code the unwrapping for now, not sure what's happening to make the structure so weird
-            val_data = [self.validation_data[0], self.validation_data[1][0]]
-            print(val_data[0].shape)
-            print(val_data[1].shape)
-            feed_dict = dict(zip(tensors, val_data))
-            result = self.sess.run([self.merged], feed_dict=feed_dict)
-            summary_str = result[0]
-            self.writer.add_summary(summary_str, epoch)
-
-        for name, value in logs.items():
-            if name in ['batch', 'size']:
-                continue
-            summary = tf.Summary()
-            summary_value = summary.value.add()
-            summary_value.simple_value = value.item()
-            summary_value.tag = name
-            self.writer.add_summary(summary, epoch)
-        self.writer.flush()
 
 if __name__ == "__main__":
     ## Parameters
@@ -233,7 +113,7 @@ if __name__ == "__main__":
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
     tboard_saver = TensorBoardMod(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
     _callbacks = [model_saver, tboard_saver]
-    _#callbacks = [tboard_saver]
+    #_callbacks = [tboard_saver]
     
     # Paths to input data files
     train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
@@ -307,7 +187,7 @@ if __name__ == "__main__":
     initial_epoch = 0
     if model_checkpoint_path is not None:
         print('Loading epoch {0:d} from {1:s}'.format(last_epoch, model_checkpoint_path))
-        _cust_objects = {'brier_skill' : brier_skill}
+        _cust_objects = {'brier_skill' : brier_skill, 'brier_pred': brier_pred, 'brier_true': brier_true}
         model = keras.models.load_model(model_checkpoint_path, custom_objects=_cust_objects)
         initial_epoch = last_epoch + 1
     else:
