@@ -89,7 +89,9 @@ if __name__ == "__main__":
     batch_size = 100
     batches_per_epoch = 10
     epochs = 100
-    embedding_trainable = False
+    embedding_trainable = False    
+    build_own_vocab = False
+    use_google_word2vec = True
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
@@ -107,7 +109,6 @@ if __name__ == "__main__":
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
     tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
     _callbacks = [model_saver, tboard_saver]
-    #_callbacks = [tboard_saver]
     
     # Paths to input data files
     train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
@@ -119,12 +120,9 @@ if __name__ == "__main__":
     # Destination file for vocab
     word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
     
-    build_own_vocab = False
-    use_google_word2vec = True
     
 if build_own_vocab and __name__ == "__main__":
     
-        
     if not os.path.exists(vocab_path):
         
         vocab_model = Word2Vec(size=embedding_size, max_vocab_size=max_vocab_size, min_count=min_word_count, workers=2, seed=2245)
@@ -141,8 +139,6 @@ if use_google_word2vec and __name__ == "__main__":
     ## Google word2vec
     # Load pre-trained embeddings
     assert embedding_size == 300
-    import gensim
-    from gensim.models.word2vec import Word2Vec
 
     #Take the first bunch of words, these are sorted by decreasing count 
     #so these will be the most important, and it saves a bunch of space/time
@@ -160,9 +156,6 @@ if use_google_word2vec and __name__ == "__main__":
 if __name__ == "__main__":
     ## Main training and testing
     
-    # Demo 
-    # from http://machinelearningmastery.com/sequence-classification-lstm-recurrent-neural-networks-python-keras/
-    # Fix random seed for reproducibility
     np.random.seed(70) # Chosen by random.org, guaranteed to be random 
     
     embedding_matrix = vocab_model.syn0

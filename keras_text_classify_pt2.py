@@ -7,6 +7,9 @@ import datetime
 import os
 import re
 
+import sacred
+from sacred import Experiment
+
 import numpy as np
 import nltk
 
@@ -35,16 +38,29 @@ from utils import find_last_checkpoint
 from custom_metrics import *
 from custom_callbacks import TensorBoardMod
 
+"""
+Paths to input data files
+Don't expect these to change, so don't make them part of `config`
+"""
+train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
+test_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/test_shuf.csv'
+class_labels = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/classes.txt' 
 
-def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
+# Input word embedding vectors
+google_word2vec = '/home/common/LargeData/GoogleNews-vectors-negative300.bin.gz'
+
+ex = Experiment('text_classification', interactive=True)
+
+@ex.capture
+def build_lstm_model(max_vocab_size, embedding_size, max_input_length, num_outputs=None,
                     internal_lstm_size=100, embedding_matrix=None, embedding_trainable=True):
     """ 
     Parameters
-    top_words : int
+    max_vocab_size : int
         Size of the vocabulary
     embedding_size : int
         Number of dimensions of the word embedding. e.g. 300 for Google word2vec
-    embedding_matrix: None, or `top_words` x `embedding_size` matrix
+    embedding_matrix: None, or `max_vocab_size` x `embedding_size` matrix
         Initial/pre-trained embeddings
     embedding_trainable : bool
         Whether we should train the word embeddings. Must be true if no embedding matrix provided
@@ -58,7 +74,7 @@ def build_lstm_model(top_words, embedding_size, max_input_length, num_outputs,
         _weights = [embedding_matrix]
     
     model = Sequential()
-    model.add(Embedding(top_words, embedding_size, input_length=max_input_length, weights=_weights, trainable=embedding_trainable))
+    model.add(Embedding(max_vocab_size, embedding_size, input_length=max_input_length, weights=_weights, trainable=embedding_trainable))
     model.add(Convolution1D(filters=32, kernel_size=3, padding='same', activation='relu'))
     model.add(MaxPooling1D(pool_size=2))
     model.add(LSTM(internal_lstm_size))
@@ -78,8 +94,9 @@ def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, ste
     
     return scores, elapsed_time
 
-
-if __name__ == "__main__":
+@ex.config
+def default_config():
+    """Default configuration. Fixed (untrainable) word embeddings loaded sfrom word2vec"""
     ## Parameters
     # Vocab Parameters
     max_vocab_size = 5000
@@ -95,82 +112,106 @@ if __name__ == "__main__":
     batch_size = 100
     batches_per_epoch = 10
     epochs = 100
-    embedding_trainable = False
+    embedding_trainable = False    
+    build_own_vocab = False
+    use_google_word2vec = True
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_tag = 'cnn_lstm_no_train_embed_scratch'
+    model_tag = 'cnn_lstm_fixed_embed'
+
+    # Destination file for vocab
+    word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
+    
+    
+@ex.named_config
+def quick():
+    """ For testing, only a small number of batches"""
+    # Training parameters
+    batch_size = 100
+    batches_per_epoch = 3
+    epochs = 3
+    
+    embedding_trainable = False
+    build_own_vocab = False
+    use_google_word2vec = True
+    
+    # Model saving parameters
+    model_tag = 'cnn_lstm_fixed_embed_quick'
+    
+    do_final_eval = False
+    
+@ex.capture
+def create_paths(model_tag):
+    """Return paths to logging and model directories, as well as model template path"""
     log_dir = './keras_logs_%s' % model_tag
     model_dir = 'models_%s' % model_tag
     model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
+    
+    return log_dir, model_dir, model_path
+    
+@ex.capture
+def create_vocab_model(build_own_vocab, vocab_path, embedding_size, max_vocab_size, min_word_count,
+                        use_google_word2vec, word2vec_model_path, train_path=train_path, google_word2vec=google_word2vec):
+                            
+    vocab_model = None
+    # Build our own vocabulary from existing text
+    if build_own_vocab:
+    
+        if not os.path.exists(vocab_path):
+            
+            vocab_model = Word2Vec(size=embedding_size, max_vocab_size=max_vocab_size, min_count=min_word_count, workers=2, seed=2245)
+            
+            print('{0}: Building own vocabulary'.format(datetime.datetime.now()))
+            desc_generator = basic_desc_generator(train_path)
+            vocab_model.build_vocab(desc_generator)
+            print('{0}: Saving vocabulary to {1}'.format(datetime.datetime.now(), vocab_path))
+            vocab_model.save(vocab_path)
+        
+        vocab_model = Word2Vec.load(vocab_path)
+    
+    if use_google_word2vec:
+        ## Google word2vec
+        # Load pre-trained embeddings
+        assert embedding_size == 300
+    
+        #Take the first bunch of words, these are sorted by decreasing count 
+        #so these will be the most important, and it saves a bunch of space/time
+        #Save vocab for future use
+        if not os.path.exists(word2vec_model_path):
+            print('Loading word2vec embeddings from {0:}'.format(google_word2vec))
+            model = Word2Vec.load_word2vec_format(google_word2vec, limit=max_vocab_size, binary=True)
+            model.init_sims(replace=True)
+            model.save(word2vec_model_path)
+        
+        print('Loading saved gensim model from {0:}'.format(word2vec_model_path))
+        word2vec_model = Word2Vec.load(word2vec_model_path)
+        vocab_model = word2vec_model
+        
+    return vocab_model
+    
+@ex.automain
+def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, optimizer_):
+        
+    # Dynamically created logging directories
+    log_dir, model_dir, model_path = create_paths()
+    
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
     
     # Logging
+    # Create callback and logging objects
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy', brier_pred, brier_true]
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
     tboard_saver = TensorBoardMod(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
     _callbacks = [model_saver, tboard_saver]
-    #_callbacks = [tboard_saver]
     
-    # Paths to input data files
-    train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
-    test_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/test_shuf.csv'
-    class_labels = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/classes.txt' 
+    # Parameters fed using Sacred
+    vocab_model = create_vocab_model()
     
-    # Input word embedding vectors
-    google_word2vec = '/home/common/LargeData/GoogleNews-vectors-negative300.bin.gz'
-    # Destination file for vocab
-    word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
-    
-    build_own_vocab = False
-    use_google_word2vec = True
-    
-if build_own_vocab and __name__ == "__main__":
-    
-        
-    if not os.path.exists(vocab_path):
-        
-        vocab_model = Word2Vec(size=embedding_size, max_vocab_size=max_vocab_size, min_count=min_word_count, workers=2, seed=2245)
-        
-        print('{0}: Building own vocabulary'.format(datetime.datetime.now()))
-        desc_generator = basic_desc_generator(train_path)
-        vocab_model.build_vocab(desc_generator)
-        print('{0}: Saving vocabulary to {1}'.format(datetime.datetime.now(), vocab_path))
-        vocab_model.save(vocab_path)
-    
-    vocab_model = Word2Vec.load(vocab_path)
-    
-if use_google_word2vec and __name__ == "__main__":
-    ## Google word2vec
-    # Load pre-trained embeddings
-    assert embedding_size == 300
-    import gensim
-    from gensim.models.word2vec import Word2Vec
-
-    #Take the first bunch of words, these are sorted by decreasing count 
-    #so these will be the most important, and it saves a bunch of space/time
-    #Save vocab for future use
-    if not os.path.exists(word2vec_model_path):
-        print('Loading word2vec embeddings from {0:}'.format(google_word2vec))
-        model = Word2Vec.load_word2vec_format(google_word2vec, limit=max_vocab_size, binary=True)
-        model.init_sims(replace=True)
-        model.save(word2vec_model_path)
-    
-    print('Loading saved gensim model from {0:}'.format(word2vec_model_path))
-    word2vec_model = Word2Vec.load(word2vec_model_path)
-    vocab_model = word2vec_model
-    
-if __name__ == "__main__":
     ## Main training and testing
-    
-    # Demo 
-    # from http://machinelearningmastery.com/sequence-classification-lstm-recurrent-neural-networks-python-keras/
-    # Fix random seed for reproducibility
-    np.random.seed(70) # Chosen by random.org, guaranteed to be random 
-    
     embedding_matrix = vocab_model.syn0
     vocab_dict = {word: vocab_model.vocab[word].index for word in vocab_model.vocab.keys()}
     vocab_size = len(vocab_dict)
@@ -193,9 +234,8 @@ if __name__ == "__main__":
     else:
         print('Building new model')
         #----------------------#
-        model = build_lstm_model(vocab_size, embedding_size, max_input_length, num_classes,
-        embedding_matrix=embedding_matrix, embedding_trainable=embedding_trainable)
-    
+        model = build_lstm_model(num_outputs=num_classes, embedding_matrix=embedding_matrix)
+        
         model.compile(loss=loss_, optimizer=optimizer_, metrics=log_metrics)
         #-----------------------#
     
@@ -230,7 +270,7 @@ if __name__ == "__main__":
         print('{0} elapsed to train {1} epochs'.format(str(training_time), epochs - initial_epoch))
         
     ## Evaluation of final model
-    if True:
+    if do_final_eval:
         num_test_samples = 1000
         num_test_steps = num_test_samples // batch_size
         num_test_samples = num_test_steps * batch_size
@@ -238,6 +278,4 @@ if __name__ == "__main__":
         test_scores, test_time = eval_on_dataset(test_path, vocab_dict, num_classes, max_input_length, num_test_steps, batch_size)
         time_per_sample = test_time.total_seconds() / num_test_samples
         print("Seconds per sample: %2.2e sec" % time_per_sample)
-    
-    
     
