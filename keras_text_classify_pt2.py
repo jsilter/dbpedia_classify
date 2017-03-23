@@ -9,6 +9,7 @@ import re
 
 import sacred
 from sacred import Experiment
+from sacred.observers import FileStorageObserver
 
 import numpy as np
 import nltk
@@ -38,18 +39,8 @@ from utils import find_last_checkpoint
 from custom_metrics import *
 from custom_callbacks import TensorBoardMod
 
-"""
-Paths to input data files
-Don't expect these to change, so don't make them part of `config`
-"""
-train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
-test_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/test_shuf.csv'
-class_labels = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/classes.txt' 
-
-# Input word embedding vectors
-google_word2vec = '/home/common/LargeData/GoogleNews-vectors-negative300.bin.gz'
-
 ex = Experiment('text_classification', interactive=True)
+ex.observers.append(FileStorageObserver.create('sacred_run_logs'))
 
 @ex.capture
 def build_lstm_model(max_vocab_size, embedding_size, max_input_length, num_outputs=None,
@@ -121,9 +112,39 @@ def default_config():
     
     # Model saving parameters
     model_tag = 'cnn_lstm_fixed_embed'
+    
+    do_final_eval = True
 
     # Destination file for vocab
     word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
+    
+    # Input train/test files
+    train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'
+    test_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/test_shuf.csv'
+    class_labels = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/classes.txt' 
+    
+    # Input word embedding vectors
+    google_word2vec = '/home/common/LargeData/GoogleNews-vectors-negative300.bin.gz'
+    
+@ex.named_config
+def trainable_embed():
+    """ Load Google word2vec but allow it to be trained """
+    embedding_trainable = True
+    build_own_vocab = False
+    use_google_word2vec = True
+    
+    # Model saving parameters
+    model_tag = 'cnn_lstm_trainable_embed'
+    
+@ex.named_config
+def denovo_embed():
+    """ Create our own vocabulary and allow it to be trained """
+    embedding_trainable = True
+    build_own_vocab = True
+    use_google_word2vec = False
+    
+    # Model saving parameters
+    model_tag = 'cnn_lstm_denovo_trainable_embed'
     
     
 @ex.named_config
@@ -144,17 +165,8 @@ def quick():
     do_final_eval = False
     
 @ex.capture
-def create_paths(model_tag):
-    """Return paths to logging and model directories, as well as model template path"""
-    log_dir = './keras_logs_%s' % model_tag
-    model_dir = 'models_%s' % model_tag
-    model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
-    
-    return log_dir, model_dir, model_path
-    
-@ex.capture
 def create_vocab_model(build_own_vocab, vocab_path, embedding_size, max_vocab_size, min_word_count,
-                        use_google_word2vec, word2vec_model_path, train_path=train_path, google_word2vec=google_word2vec):
+                        use_google_word2vec, word2vec_model_path, train_path, google_word2vec):
                             
     vocab_model = None
     # Build our own vocabulary from existing text
@@ -193,10 +205,19 @@ def create_vocab_model(build_own_vocab, vocab_path, embedding_size, max_vocab_si
     return vocab_model
     
 @ex.automain
-def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, optimizer_):
+def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, optimizer_, _config, do_final_eval=True):
+    
+    # Bring these keys into general namespace
+    # Note that '_config' variable name subject to change
+    string_keys = ['model_tag', 'train_path', 'test_path', 'class_labels', 'google_word2vec']
+    for key in string_keys:
+        exec '%s = "%s"' % (key, _config[key]) in locals()
         
+    print(train_path)
     # Dynamically created logging directories
-    log_dir, model_dir, model_path = create_paths()
+    log_dir = './keras_logs_%s' % model_tag
+    model_dir = 'models_%s' % model_tag
+    model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
     
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)

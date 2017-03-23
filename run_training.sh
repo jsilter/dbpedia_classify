@@ -1,11 +1,12 @@
 #!/bin/bash
 set -x
 
-out_log_file="$1"
+python keras_text_classify_pt2.py with quick model_tag="cnn_lstm_fixed_embed_quick_custom"
+# Default config
+python keras_text_classify_pt2.py
 
-git_hash=`git rev-parse HEAD`
+# Allow embeddings to be trained
+python keras_text_classify_pt2.py with trainable_embed
 
-echo `date` >> ${out_log_file}
-echo ${git_hash} >> ${out_log_file}
-
-python keras_text_classify_pt1.py | tee --append ${out_log_file}
+# Train vocab ourselves
+python keras_text_classify_pt2.py with denovo_embed
