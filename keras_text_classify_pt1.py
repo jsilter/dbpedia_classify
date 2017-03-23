@@ -97,7 +97,7 @@ if __name__ == "__main__":
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_tag = 'cnn_lstm_no_train_embed_scratch'
+    model_tag = 'cnn_lstm_no_train_embed_pt1'
     log_dir = './keras_logs_%s' % model_tag
     model_dir = 'models_%s' % model_tag
     model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
@@ -107,8 +107,8 @@ if __name__ == "__main__":
     # Logging
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy']
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
-    tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
-    _callbacks = [model_saver, tboard_saver]
+    #tboard_saver = keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
+    _callbacks = [model_saver]
     
     # Paths to input data files
     train_path = '/home/common/LargeData/TextClassificationDatasets/dbpedia_csv/train_shuf.csv'

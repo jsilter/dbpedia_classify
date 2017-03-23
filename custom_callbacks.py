@@ -15,7 +15,6 @@ class TensorBoardMod(keras.callbacks.TensorBoard):
         
         if self.validation_data:
             tensors = self.model.inputs + self.model.model._feed_targets
-            # TODO Hard-code the unwrapping for now, not sure what's happening to make the structure so weird
             val_data = [self.validation_data[0], self.validation_data[1][0]]
             feed_dict = dict(zip(tensors, val_data))
             result = self.sess.run([self.merged], feed_dict=feed_dict)
