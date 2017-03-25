@@ -87,7 +87,7 @@ def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, ste
 
 @ex.config
 def default_config():
-    """Default configuration. Fixed (untrainable) word embeddings loaded sfrom word2vec"""
+    """Default configuration. Fixed (untrainable) word embeddings loaded from word2vec"""
     ## Parameters
     # Vocab Parameters
     max_vocab_size = 5000
