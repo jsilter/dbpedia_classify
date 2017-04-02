@@ -37,7 +37,7 @@ from text_utils import create_batch_generator, basic_desc_generator
 from utils import find_last_checkpoint
 
 from custom_metrics import *
-from custom_callbacks import TensorBoardMod
+from custom_callbacks import TensorBoardMod, FilterTensorBoard
 
 ex = Experiment('text_classification', interactive=True)
 ex.observers.append(FileStorageObserver.create('sacred_run_logs'))
@@ -216,6 +216,9 @@ def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, op
     print(train_path)
     # Dynamically created logging directories
     log_dir = './keras_logs_%s' % model_tag
+    train_log_dir = '%s/train' % log_dir
+    val_log_dir = '%s/val' % log_dir
+    custom_log_dir = '%s/custom' % log_dir
     model_dir = 'models_%s' % model_tag
     model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
     
@@ -226,8 +229,12 @@ def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, op
     # Create callback and logging objects
     log_metrics = ['categorical_accuracy', 'categorical_crossentropy', brier_pred, brier_true]
     model_saver = keras.callbacks.ModelCheckpoint(model_path,verbose=1)
-    tboard_saver = TensorBoardMod(log_dir=log_dir, histogram_freq=0, write_graph=False, write_images=False)
-    _callbacks = [model_saver, tboard_saver]
+    # Log savers which play reasonably well with Keras
+    train_tboard_logger = FilterTensorBoard(log_dir=train_log_dir, write_graph=False, write_images=False, log_regex=r'^(?!val).*')
+    val_tboard_logger = FilterTensorBoard(log_dir=val_log_dir, write_graph=False, write_images=False, log_regex=r"^val")
+    #Custom saver
+    custom_tboard_saver = TensorBoardMod(log_dir=custom_log_dir, histogram_freq=0, write_graph=False, write_images=False, save_logs=False)
+    _callbacks = [model_saver, train_tboard_logger, val_tboard_logger, custom_tboard_saver]
     
     # Parameters fed using Sacred
     vocab_model = create_vocab_model()
