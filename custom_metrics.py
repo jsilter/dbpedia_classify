@@ -138,7 +138,7 @@ def brier_true(y_true, y_pred):
     return brier_skill(y_true, y_pred, True)
         
 def make_binary_metric(metric_name, metric_func, num_classes, y_true, preds_one_hot):
-    
+    """Create a binary metric using `metric_func`"""
     overall_met = [None for _ in range(num_classes)]
     with tf.name_scope(metric_name):
         for cc in range(num_classes):
@@ -152,7 +152,7 @@ def make_binary_metric(metric_name, metric_func, num_classes, y_true, preds_one_
         tf.summary.histogram('overall', overall_met) 
     
 def create_batch_pairwise_metrics(y_true, y_pred):
-    #assert K.get_variable_shape(y_true)[1] == K.get_variable_shape(y_pred)[1]
+    """Create precision, recall, and fmeasure metrics. Log them directly using tensorflow"""
     num_classes = K.get_variable_shape(y_pred)[1]
     preds_cats = K.argmax(y_pred, axis=1)
     preds_one_hot = K.one_hot(preds_cats, num_classes)

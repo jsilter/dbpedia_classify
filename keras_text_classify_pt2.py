@@ -43,15 +43,15 @@ ex = Experiment('text_classification', interactive=True)
 ex.observers.append(FileStorageObserver.create('sacred_run_logs'))
 
 @ex.capture
-def build_lstm_model(max_vocab_size, embedding_size, max_input_length, num_outputs=None,
+def build_lstm_model(vocab_size, embedding_size, max_input_length, num_outputs=None,
                     internal_lstm_size=100, embedding_matrix=None, embedding_trainable=True):
     """ 
     Parameters
-    max_vocab_size : int
+    vocab_size : int
         Size of the vocabulary
     embedding_size : int
         Number of dimensions of the word embedding. e.g. 300 for Google word2vec
-    embedding_matrix: None, or `max_vocab_size` x `embedding_size` matrix
+    embedding_matrix: None, or `vocab_size` x `embedding_size` matrix
         Initial/pre-trained embeddings
     embedding_trainable : bool
         Whether we should train the word embeddings. Must be true if no embedding matrix provided
@@ -65,14 +65,14 @@ def build_lstm_model(max_vocab_size, embedding_size, max_input_length, num_outpu
         _weights = [embedding_matrix]
     
     model = Sequential()
-    model.add(Embedding(max_vocab_size, embedding_size, input_length=max_input_length, weights=_weights, trainable=embedding_trainable))
+    model.add(Embedding(vocab_size, embedding_size, input_length=max_input_length, weights=_weights, trainable=embedding_trainable))
     model.add(Convolution1D(filters=32, kernel_size=3, padding='same', activation='relu'))
     model.add(MaxPooling1D(pool_size=2))
     model.add(LSTM(internal_lstm_size))
     model.add(Dense(num_outputs, activation='softmax'))
     return model
     
-def eval_on_dataset(dataset_path, vocab_dict, num_classes, max_input_length, steps, batch_size=100):
+def eval_on_dataset(model, dataset_path, vocab_dict, num_classes, max_input_length, steps, batch_size=100):
     start_time = datetime.datetime.now()
 
     _generator = create_batch_generator(dataset_path, vocab_dict, num_classes, max_input_length, batch_size)
@@ -155,9 +155,9 @@ def quick():
     batches_per_epoch = 3
     epochs = 3
     
-    embedding_trainable = False
-    build_own_vocab = False
-    use_google_word2vec = True
+    embedding_trainable = True
+    build_own_vocab = True
+    use_google_word2vec = False
     
     # Model saving parameters
     model_tag = 'cnn_lstm_fixed_embed_quick'
@@ -255,7 +255,7 @@ def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, op
     else:
         print('Building new model')
         #----------------------#
-        model = build_lstm_model(num_outputs=num_classes, embedding_matrix=embedding_matrix)
+        model = build_lstm_model(vocab_size, num_outputs=num_classes, embedding_matrix=embedding_matrix)
         
         model.compile(loss=loss_, optimizer=optimizer_, metrics=log_metrics)
         #-----------------------#
@@ -296,7 +296,7 @@ def main_func(max_input_length, batch_size, batches_per_epoch, epochs, loss_, op
         num_test_steps = num_test_samples // batch_size
         num_test_samples = num_test_steps * batch_size
         print('{0}: Starting testing on {1} samples'.format(datetime.datetime.now(), num_test_samples))
-        test_scores, test_time = eval_on_dataset(test_path, vocab_dict, num_classes, max_input_length, num_test_steps, batch_size)
+        test_scores, test_time = eval_on_dataset(model, test_path, vocab_dict, num_classes, max_input_length, num_test_steps, batch_size)
         time_per_sample = test_time.total_seconds() / num_test_samples
         print("Seconds per sample: %2.2e sec" % time_per_sample)
     
