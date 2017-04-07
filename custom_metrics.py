@@ -5,8 +5,22 @@ from keras import backend as K
 import tensorflow as tf
 import numpy as np
 
-# The follow metrics taken from Keras v1.2
-# TODO Include copy of MIT license
+# The following metrics taken from Keras v1.2: precision, recall, fbeta_score, fmeasure
+"""
+All contributions by François Chollet:
+Copyright (c) 2015, François Chollet.
+All rights reserved.
+
+All contributions by Google:
+Copyright (c) 2015, Google, Inc.
+All rights reserved.
+
+All other contributions:
+Copyright (c) 2015, the respective contributors.
+All rights reserved.
+
+Each contributor holds copyright over their respective contributions.
+"""
 
 def precision(y_true, y_pred):
     """Precision metric.
@@ -66,6 +80,8 @@ def fbeta_score(y_true, y_pred, beta=1):
     bb = beta ** 2
     fbeta_score = (1 + bb) * (p * r) / (bb * p + r + K.epsilon())
     return fbeta_score
+    
+#---------------------------
 
 
 def fmeasure(y_true, y_pred):
