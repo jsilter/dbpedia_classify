@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #!/bin/bash
 from __future__ import division  # Python 2 users only
 
