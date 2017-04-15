@@ -15,10 +15,11 @@ from keras.utils import to_categorical
 from keras.preprocessing import sequence
 
 
-def create_training_batch(generator, num_classes, max_input_length, max_batch_size=64, return_raw_text=False):
+def create_training_batch(generator, num_classes, max_input_length, max_batch_size=64, return_raw_text=False, return_titles):
     text_data = []
     X_ = []
     y_ = []
+    titles = []
     for info_dict in generator:
         # Pick out the sequence of integers as the words
         seq_data = info_dict['int_word_list']
@@ -28,6 +29,7 @@ def create_training_batch(generator, num_classes, max_input_length, max_batch_si
         text_data.append(info_dict['word_list'])
         X_.append(seq_data)
         y_.append(_class)
+        titles.append(info_dict['title'])
         
         if len(y_) >= max_batch_size:
             break
@@ -39,6 +41,8 @@ def create_training_batch(generator, num_classes, max_input_length, max_batch_si
         
     if return_raw_text:
         return X_train, y_train, text_data
+    elif return_title:
+        return X_train, y_train, titles
     else:
         return X_train, y_train
         

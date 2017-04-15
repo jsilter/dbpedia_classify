@@ -75,6 +75,7 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     
     model_dir = 'models_%s' % model_tag
+    log_dir = 'keras_logs_%s' % model_tag
     
     ## Load existing model
     last_epoch, model_checkpoint_path = find_last_checkpoint(model_dir)
@@ -86,16 +87,18 @@ if __name__ == "__main__":
     
     ## Run predictions
     if True:
-        max_to_pred = 10000
+        max_to_pred = 1000
         pred_res = np.zeros([max_to_pred, num_classes])
         act_res = np.zeros(max_to_pred)
         all_text = []
+        all_titles = []
         print('{0}: Predicting on {1} samples'.format(datetime.datetime.now(), max_to_pred))
-        pred_generator = create_batch_generator(test_path, vocab_dict, num_classes, max_input_length, batch_size, return_raw_text=True)
+        pred_generator = create_batch_generator(test_path, vocab_dict, num_classes, max_input_length, batch_size, return_raw_text=False)
         num_predded = 0
         for pred_inputs in pred_generator:
-            X_pred, y_true, raw_text = pred_inputs
-            all_text += raw_text
+            X_pred, y_true, obj_title = pred_inputs
+            #all_text += raw_text
+            all_titles += obj_title
             y_preds = model.predict(X_pred)
             
             offset = num_predded
@@ -110,7 +113,8 @@ if __name__ == "__main__":
         print('{0}: Finished'.format(datetime.datetime.now()))
         
     # Plot correlation between predictions as heatmap
-    if False:
+    pred_corr_heatmap_path = os.path.join(plot_dir, '%s_pred_correlation.png' % model_tag)
+    if not os.path.exists(pred_corr_heatmap_path):
         corrs = np.corrcoef(pred_res, rowvar=0)
         heatmap_cmap = plt.get_cmap('bwr')
         
@@ -129,7 +133,7 @@ if __name__ == "__main__":
         ax.invert_yaxis()
         plt.tight_layout()
         
-        plt.savefig(os.path.join(plot_dir, '%s_pred_correlation.png' % model_tag))
+        plt.savefig(pred_corr_heatmap_path)
         
     #tSNE
     from sklearn.preprocessing import normalize
@@ -142,6 +146,11 @@ if __name__ == "__main__":
     perplexity_list = [5, 30, 60, 250]
     
     for perplexity in perplexity_list:
+        
+        tsne_vis_path = os.path.join(plot_dir, '%s_tSNE_%d_scatter.png' % (model_tag, perplexity))
+        
+        if os.path.exists(tsne_vis_path):
+            continue
     
         tsne = TSNE(perplexity=perplexity, n_components=2, init='pca', n_iter=5000, random_state=2157)
         low_dim_embeds = tsne.fit_transform(plot_data_points)
@@ -186,8 +195,34 @@ if __name__ == "__main__":
         plt.title('tSNE Visualization. Perplexity %d' % perplexity)
         plt.legend(loc='lower right', numpoints=1, fontsize=6, framealpha=0.5)
         
-        plt.savefig(os.path.join(plot_dir, '%s_tSNE_%d_scatter.png' % (model_tag, perplexity)))
-
-    plt.show()
+        plt.savefig(tsne_vis_path)
+        
+    # Export data to visualize with tensorboard
+    # using the embedding projector
+    # See https://www.tensorflow.org/get_started/embedding_viz
+    from tensorflow.contrib.tensorboard.plugins import projector
+    config = projector.ProjectorConfig()
+    
+    pred_probs = tf.Variable(pred_res, name='predicted_probs')
+    
+    metadata_path = os.path.join(log_dir, 'metadata.tsv')
+    metadata_cols = ['title', 'class']
+    with open(metadata_path, 'w') as met_fi:
+        met_fi.write('%s\n' % '\t'.join(metadata_cols))
+        for rn in range(act_res.shape[0]):
+            cur_col = [all_titles[rn], str(act_res[rn])]
+            met_fi.write('%s\n' % '\t'.join(cur_col))
+            
+    
+    embedding = config.embeddings.add()
+    embedding.tensor_name = pred_points.name
+    embedding.metadata_path = metadata_path
+    
+    # Use the same LOG_DIR where you stored your checkpoint.
+    summary_writer = tf.summary.FileWriter(log_dir)
+    
+    # The next line writes a projector_config.pbtxt in the LOG_DIR. TensorBoard will
+    # read this file during startup.
+    projector.visualize_embeddings(summary_writer, config)
     
     
