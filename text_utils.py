@@ -15,7 +15,10 @@ from keras.utils import to_categorical
 from keras.preprocessing import sequence
 
 
-def create_training_batch(generator, num_classes, max_input_length, max_batch_size=64, return_raw_text=False, return_titles):
+def create_training_batch(generator, num_classes, max_input_length, max_batch_size=64, return_raw_text=False, return_title=False):
+    
+    # Can't do both; only one, the other, or neither
+    assert not (return_raw_text and return_title)
     text_data = []
     X_ = []
     y_ = []
@@ -75,8 +78,9 @@ def create_desc_generator(input_path, word2id, indefinite=False, min_word_count=
         _finished = not indefinite
         
         
-def create_batch_generator(input_path, word2id, num_classes, max_input_length, batch_size, return_raw_text=False):
+def create_batch_generator(input_path, word2id, num_classes, max_input_length, batch_size, return_raw_text=False, return_title=False):
     desc_generator = create_desc_generator(input_path, word2id, indefinite=True)
     while True:
-        cur_batch = create_training_batch(desc_generator, num_classes, max_input_length, batch_size, return_raw_text=return_raw_text)
+        cur_batch = create_training_batch(desc_generator, num_classes, max_input_length, batch_size, 
+            return_raw_text=return_raw_text, return_title=return_title)
         yield cur_batch
