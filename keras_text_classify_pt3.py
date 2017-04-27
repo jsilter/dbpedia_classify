@@ -124,9 +124,9 @@ if __name__ == "__main__":
         
         #Histogram of correlations
         plt.figure()
-        hist_indexes = np.triu_indices(corrs.shape[0])
+        hist_indexes = np.triu_indices(corrs.shape[0], 1)
         hist_matr = corrs[hist_indexes]
-        plt.hist(corrs[:], bins=100, range=[-1.0, 1.0], alpha=1.0)
+        plt.hist(hist_matr, bins=100, range=[-0.5, 0.5], alpha=1.0)
         plt.savefig(pred_corr_hist_path)
         
         plt.figure()
