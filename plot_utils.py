@@ -25,7 +25,8 @@ def plot_with_labels(low_dim_embs, labels, filename=None, text_alpha=0.8, **plot
     plt.scatter(xx, yy, **plot_kwargs)
     for ii, label in enumerate(labels):
         x, y = xx[ii], yy[ii]
-        plt.annotate(label,
+        try:
+            plt.annotate(label,
                         xy=(x, y),
                         xytext=(5, 2),
                         size='small',
@@ -33,6 +34,9 @@ def plot_with_labels(low_dim_embs, labels, filename=None, text_alpha=0.8, **plot
                         textcoords='offset points',
                         ha='right',
                         va='bottom')
+        except Exception as ex:
+            pass
+            #raise ex
                         
     if filename is not None:
         plt.title(filename.split('.')[0])

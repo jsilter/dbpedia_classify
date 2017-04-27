@@ -103,7 +103,7 @@ def default_config():
     batch_size = 100
     batches_per_epoch = 10
     epochs = 100
-    embedding_trainable = False    
+    embedding_trainable = False
     build_own_vocab = False
     use_google_word2vec = True
     
