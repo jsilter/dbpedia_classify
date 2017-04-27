@@ -23,9 +23,6 @@ from keras.layers.embeddings import Embedding
 from keras.preprocessing import sequence
 import keras.backend as K
 
-import gensim
-from gensim.models.word2vec import Word2Vec
-
 from text_utils import create_batch_generator, basic_desc_generator
 from utils import find_last_checkpoint
 
@@ -90,12 +87,14 @@ if __name__ == "__main__":
     batches_per_epoch = 10
     epochs = 100
     embedding_trainable = False
+    build_own_vocab = False
+    use_google_word2vec = True
     
     loss_ = 'categorical_crossentropy'
     optimizer_ = 'adam'
     
     # Model saving parameters
-    model_tag = 'cnn_lstm_no_train_embed_scratch'
+    model_tag = 'cnn_lstm_no_train_embed_pt1'
     log_dir = './keras_logs_%s' % model_tag
     model_dir = 'models_%s' % model_tag
     model_path = os.path.join(model_dir, 'word2vec_%s_{epoch:02d}.hdf5' % model_tag)
@@ -119,8 +118,6 @@ if __name__ == "__main__":
     # Destination file for vocab
     word2vec_model_path = 'GoogleNews-vectors-negative300_top%d.model' % max_vocab_size
     
-    build_own_vocab = False
-    use_google_word2vec = True
     
 if build_own_vocab and __name__ == "__main__":
     
@@ -153,7 +150,7 @@ if use_google_word2vec and __name__ == "__main__":
         model.init_sims(replace=True)
         model.save(word2vec_model_path)
     
-    print('Loading saved gensim model from {0:}'.format(word2vec_model_path))
+    print('Loading saved gensimscratch model from {0:}'.format(word2vec_model_path))
     word2vec_model = Word2Vec.load(word2vec_model_path)
     vocab_model = word2vec_model
     
