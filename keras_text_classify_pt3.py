@@ -117,9 +117,17 @@ if __name__ == "__main__":
         
     # Plot correlation between predictions as heatmap
     pred_corr_heatmap_path = os.path.join(plot_dir, '%s_pred_correlation.png' % model_tag)
+    pred_corr_hist_path = os.path.join(plot_dir, '%s_pred_histogram.png' % model_tag)
     if not os.path.exists(pred_corr_heatmap_path):
         corrs = np.corrcoef(pred_res, rowvar=0)
         heatmap_cmap = plt.get_cmap('bwr')
+        
+        #Histogram of correlations
+        plt.figure()
+        hist_indexes = np.triu_indices(corrs.shape[0])
+        hist_matr = corrs[hist_indexes]
+        plt.hist(corrs[:], bins=100, range=[-1.0, 1.0], alpha=1.0)
+        plt.savefig(pred_corr_hist_path)
         
         plt.figure()
         heatmap = plt.pcolor(corrs, cmap=heatmap_cmap, vmin=-1.0, vmax=1.0)
@@ -137,7 +145,8 @@ if __name__ == "__main__":
         plt.tight_layout()
         
         plt.savefig(pred_corr_heatmap_path)
-        
+    
+    assert False
     #tSNE
     from sklearn.preprocessing import normalize
     from sklearn.manifold import TSNE
