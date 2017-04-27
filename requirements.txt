@@ -1,0 +1,8 @@
+numpy
+nltk
+keras
+tensorflow
+sacred==0.7b3
+gensim
+matplotlib
+
