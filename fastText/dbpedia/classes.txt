@@ -1,0 +1,14 @@
+Company	1
+EducationalInstitution	2
+Artist	3
+Athlete	4
+OfficeHolder	5
+Transportation	6
+Building	7
+NaturalPlace	8
+Village	9
+Animal	10
+Plant	11
+Album	12
+Film	13
+WrittenWork	14
